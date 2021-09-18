@@ -24,7 +24,7 @@ end
 fig = figure;
 yyaxis left
 
-inxes = 1: length(SNR);
+inxes = 1: length(SNR)-4;
 SNRForPlot = SNR(inxes);
 meanError = meanrelativeErrorLS(inxes);
 proportionsForPlot = proportions(inxes, :);

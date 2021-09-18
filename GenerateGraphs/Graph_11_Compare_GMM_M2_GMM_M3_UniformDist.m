@@ -8,23 +8,23 @@ L = 15; %Signal length
 
 % Observations input
 numberOfObservations = 100000; % Number of observations
-sigmaArray = logspace(-2,1,8); % sigma values to check
+sigmaArray = logspace(-2,1.2,10); % sigma values to check
 sigmaDiag = ones(L, 1); % homogenous noise case
-pOutlier = 0; % outliers precent, 0 - mean none.
+pOutlier = 0; % outliers precent
 sigmaOutlier = 10 * eye(L,L);
 
 projectionFunction =@() eye(L,L);%(k, L); % projection matrix
 
 % Comparassion input
 numberOfStartingPoints = 2; % number of intial guesses
-numberRepeats = 100; % This number represent how many signals & distributions (rhos) the code will compare).
+numberRepeats = 25; % This number represent how many signals & distributions (rhos) the code will compare).
 
 % Optimization input
 maxNumOfIterations = inf; % number of iteration in each GMM optimization
-numberOfStepsGMM = 2; % number of steps in the GMM
+numberOfStepsGMM = 1; % number of steps in the GMM
 
 % Define saving fig paramter
-savingPath = 'Graphs/LS_With_2StepGMM-StandardCase/';
+savingPath = 'Graphs/GMM_M2_With_GMM_M3-UniformDist/';
 
 %% initialize data saveing objects
 % Save SNR values
@@ -37,6 +37,7 @@ relativeErrorGMM = zeros(length(sigmaArray), numberRepeats, 4);
 %% Run on every noise level
 for indexSigma = 1 : length(sigmaArray)
     % Compute sigma's covraice matrix
+    sigmaScalar = sigmaArray(indexSigma);
     sigma = (sigmaArray(indexSigma)^2) * diag(sigmaDiag);
     sigmaOurlierCurrent =  sigmaArray(indexSigma) * sigmaOutlier;
     covOurlier = sigmaOurlierCurrent .^ 2;
@@ -55,7 +56,7 @@ for indexSigma = 1 : length(sigmaArray)
         %% Sample a ground truth (signal + shifts' distibution)
         
         [currentGroundTruth] = GenerateStartingPoints(L, 1);
-        
+        currentGroundTruth(1:L) = (1/L) * ones(L,1);
         rho = currentGroundTruth(1:L);
         signal = currentGroundTruth(L + 1 : end);
         
@@ -67,29 +68,30 @@ for indexSigma = 1 : length(sigmaArray)
         observations = GenerateObservations(signal, numberOfObservations,...
                             rho, sigma, projection, pOutlier, sigmaOurlierCurrent);
                         
-        %% Compute Estimations
+        %% Compute Estimations M2
+
         [M1Est, M2Est] = ComputeEmpricalMoments(observations);
-        M2Est = ExtractUpperTriangleMatrixVectorize(M2Est);
+         M2Est = ExtractUpperTriangleMatrixVectorize(M2Est);
         empricalMoment = [M1Est; M2Est];
-        
         %% Random a starting point for the optimization
         [startingPoints] = GenerateStartingPoints(L, numberOfStartingPoints);
 
         %% Define computation method to W
-        momentFuction1by1 = @(theta, observations, sigma) ComputeMomentFucntion1By1(...
-                  theta(1:L), theta((L+1) : end), observations, sigma,...
-                  projection, pOutlier, covOurlier);
 
-        %% Compute W
+        
+        momentFuction1by1Direct = @(theta, observations, sigma) ComputeMomentFucntion1By1Direct(...
+                  theta(1:L), theta((L+1) : end), observations, sigma,...
+                  projection, pOutlier, covOurlier);   
+        %% Compute W - M2
         
         WLS = eye(length(empricalMoment), length(empricalMoment));
         WGMM = eye(length(empricalMoment), length(empricalMoment));
-        
-        %% LS
+        WGMM = ComputeW(startingPoints(:,1) , observations, sigma, momentFuction1by1Direct);
+        %% GMM - M2
         [estSignalLS, estRhoLS, infoLS, ~] = ComputeIterativeGMMviaMatlab(startingPoints,...
                 WLS, observations, empricalMoment, sigma,...
-                momentFuction1by1, projection, pOutlier, covOurlier,...
-                maxNumOfIterations, 1, 1);
+                momentFuction1by1Direct, projection, pOutlier, covOurlier,...
+                maxNumOfIterations, numberOfStepsGMM, 1);
         
         %% Compute relative Errors - LS
         relativeErrorSignalLS = RelativeErrorUpToShift(signal, estSignalLS);
@@ -98,11 +100,30 @@ for indexSigma = 1 : length(sigmaArray)
         cpuTimeLS = infoLS.CPUTime;
         tmprelativeErrorLS(iRep,:) =  [relativeErrorSignalLS,...
             relativeErrorRhoLS, numberOfIterLS, cpuTimeLS];
+         disp([num2str(iRep) ': end LS']);
+        
+          %% Compute Estimations M3
+
+        [indecesM3] = ChooceIndecesM3(L);
+
+        [M1Est, M2Est] = ComputeEmpricalMoments(observations);
+         M2Est = ExtractUpperTriangleMatrixVectorize(M2Est);
+        [M3Est] = ComuteM3Empric(observations,indecesM3);
+        empricalMoment = [M1Est; M2Est;M3Est];
+        %% Define computation method to W -M3
+
+        
+        momentFuction1by1Direct = @(theta, observations, sigma) ComputeMomentFucntion1By1DirectMoMent3(...
+                  theta(1:L), theta((L+1) : end), observations, sigma,...
+                  projection, pOutlier, covOurlier);
+        %% Compute W - M3
+         WGMM = ComputeW(startingPoints(:,1) , observations, sigma, momentFuction1by1Direct);
+
         %% Opt GMM
-        [estSignalGMM, estRhoGMM, infoGMM, ~] = ComputeIterativeGMMviaMatlab(...
+        [estSignalGMM, estRhoGMM, infoGMM, ~] = ComputeIterativeGMMviaMatlabM3(...
                 startingPoints, WGMM, observations, empricalMoment, sigma,...
-                momentFuction1by1, projection, pOutlier, covOurlier,...
-                maxNumOfIterations, numberOfStepsGMM, 1);
+                momentFuction1by1Direct, projection, pOutlier, covOurlier,...
+                maxNumOfIterations, numberOfStepsGMM, 1, sigmaScalar, indecesM3);
         %% Compute relative Errors - GMM
         relativeErrorSignalGMM = RelativeErrorUpToShift(signal, estSignalGMM);
         relativeErrorRhoGMM = RelativeErrorUpToShift(rho, estRhoGMM);
@@ -110,7 +131,8 @@ for indexSigma = 1 : length(sigmaArray)
         cpuTimeGMM = infoGMM.CPUTime;%singularValueDistanceToEye(WLS);
         tmprelativeErrorGMM(iRep,:) =  [relativeErrorSignalGMM,...
             relativeErrorRhoGMM, numberOfIterGMM, cpuTimeGMM];
-         
+        disp([num2str(iRep) ': end GMM']);
+
     end
 
     relativeErrorLS(indexSigma,:,:) = tmprelativeErrorLS;
@@ -157,7 +179,7 @@ for ii = 1 : 4
     fig = figure();
     %% Mean
     subplot(2,1,1);
-    loglog(SNR, meanrelativeErrorLS, 'r*-',...
+    semilogx(SNR, meanrelativeErrorLS, 'r*-',...
         SNR, meanrelativeErrorOpt, 'b*-');
 
     xlabel('SNR');
@@ -173,7 +195,7 @@ for ii = 1 : 4
     end
     %% Variance
     subplot(2,1,2);
-    loglog(SNR, stdrelativeErrorLS, 'r*-', ...
+    semilogx(SNR, stdrelativeErrorLS, 'r*-', ...
         SNR, stdrelativeErrorOpt, 'b*-');
     
     xlabel('SNR');
@@ -212,7 +234,6 @@ for ii = 1 : 4
     end
     
      fig = figure;
-   % [fig] = BoxPlotAsaf(fig, SNR(end:-1:1), proportions(end:-1:1,end:-1:1), 'b*-');
     [fig] = BoxPlotAsaf(fig, SNR, proportions, 'b*-');
     [indexMeanBigger1] = find(meanrelativeErrorOpt >= 1,1);
     hold on;
@@ -248,3 +269,5 @@ for ii = 1 : 4
     end
 
 end
+%%
+MakeGraphPrrety_M2_M3;

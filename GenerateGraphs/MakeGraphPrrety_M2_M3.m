@@ -17,48 +17,44 @@ for indexSigma = 1 : length(sigmaArray)
     stdrelativeErrorLS(indexSigma) = std(squeeze(relativeErrorLS(indexSigma,:,ii)));
     stdrelativeErrorOpt(indexSigma) = std(squeeze(relativeErrorGMM(indexSigma,:,ii)));
     % Ratio
-    proportions(indexSigma,:) = (squeeze(relativeErrorGMM(indexSigma,:,ii))./...
-                                squeeze(relativeErrorLS(indexSigma,:,ii)));
+    proportions(indexSigma,:) = (squeeze(relativeErrorLS(indexSigma,:,ii))./...
+                                squeeze(relativeErrorGMM(indexSigma,:,ii)));
 end
-
-
-%% Plot histogram - Relative Error
 
 fig = figure;
 yyaxis left
 
-SNRForPlot = SNR(2:end);
-meanError = meanrelativeErrorOpt(2:end);
+inxes = 1: length(SNR)-1;
+SNRForPlot = SNR(inxes);
+meanError = meanrelativeErrorLS(inxes);
+proportionsForPlot = proportions(inxes, :);
 
 
-proportionsForPlot = proportions(2:end, :);
 [fig,p1,p2] = BoxPlotAsaf(fig, SNRForPlot, proportionsForPlot, 'b*--');
 % xtick
 [indexMeanBigger1] = find(meanrelativeErrorOpt >= 1,1);
 hold on;
 plot(1: size(proportionsForPlot,1), ones(size(proportionsForPlot,1),1),'k--');
 hold on;
-% if ~isempty(indexMeanBigger1)
-%     plot((indexMeanBigger1) * ones(2,1), [max(proportionsForPlot(:)); min(proportionsForPlot(:))],'g');
-% end
+if ~isempty(indexMeanBigger1)
+    plot((indexMeanBigger1) * ones(2,1), [max(proportionsForPlot(:)); min(proportionsForPlot(:))],'g');
+end
 
 labels = [500,100,10,1,0.1, 0.01];
-AA = interp1(SNRForPlot, 1:length(SNRForPlot), labels,'linear','extrap');
+AA = interp1(SNRForPlot, 1:length(SNRForPlot), labels, 'linear','extrap');
 xticks(AA)
 xticklabels(labels)
 xlabel('SNR', 'fontsize', 12, 'fontweight','bold');
-ylabel('Rel. Error Ratio: L2-GMM / Geometric Median' , 'fontsize', 12, 'fontweight','bold');
-ylim([0, 20]);
+ylabel('Ratio of Rel. Error of GMM: 2 / 3 Moments' , 'fontsize', 12, 'fontweight','bold');
+ylim([0.9,200]);
 
 yyaxis right
 p3 = semilogy(1:length(meanError),meanError, 'x--');
 hold on;
 set(gca, 'YScale', 'log')
-ylabel('Mean Error of the L2-GMM Estimator')
+ylabel('Mean Error of the GMM with 2 moments Estimator')
 
-legend([p1,p2,p3],{'Mean', 'Median', 'Mean - rel error GMM'}, 'location', 'northwest');
-
-
+legend([p1,p2,p3],{'Mean', 'Median', 'Mean - rel error LS'}, 'location', 'northwest');
 
 
 if (ii == 1)

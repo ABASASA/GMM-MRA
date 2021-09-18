@@ -8,42 +8,40 @@ L = 15; %Signal length
 
 % Observations input
 numberOfObservations = 100000; % Number of observations
-sigmaScalar = 0.1; % sigma values to check
+sigmaArray = logspace(-2,1.2,10); % sigma values to check
 sigmaDiag = ones(L, 1); % homogenous noise case
 pOutlier = 0; % outliers precent
-ks = floor(L/2)+2: L;
+sigmaOutlier = 10 * eye(L,L);
+
+projectionFunction =@() eye(L,L);%(k, L); % projection matrix
 
 % Comparassion input
 numberOfStartingPoints = 2; % number of intial guesses
-numberRepeats = 80; % This number represent how many signals & distributions (rhos) the code will compare).
+numberRepeats = 100; % This number represent how many signals & distributions (rhos) the code will compare).
 
 % Optimization input
 maxNumOfIterations = inf; % number of iteration in each GMM optimization
 numberOfStepsGMM = 1; % number of steps in the GMM
 
 % Define saving fig paramter
-savingPath = 'Graphs/LS_With_2StepGMM-Cryo1D_sigma01/';
+savingPath = 'Graphs/LS_With_GMM-HomogNoise/';
 
 %% initialize data saveing objects
 % Save SNR values
-% SNR = zeros(size(sigmaArray));
+SNR = zeros(size(sigmaArray));
 
-relativeErrorLS = zeros(length(ks), numberRepeats, 4); % one row for signal and one for distibution.
-relativeErrorGMM = zeros(length(ks), numberRepeats, 4);
+relativeErrorLS = zeros(length(sigmaArray), numberRepeats, 4); % one row for signal and one for distibution.
+relativeErrorGMM = zeros(length(sigmaArray), numberRepeats, 4);
 
 
 %% Run on every noise level
-for inexK = 1 : length(ks)
-    k = ks(inexK);
-    projectionFunction =@() eye(k,L);%(k, L); % projection matrix
-    currentSigmaOutlier = 10 * sigmaScalar * eye(k,k);
-
-    
+for indexSigma = 1 : length(sigmaArray)
     % Compute sigma's covraice matrix
-    sigmaMat = (sigmaScalar^2) * diag(sigmaDiag);
-    covOutlier = currentSigmaOutlier .^2;
+    sigma = (sigmaArray(indexSigma)^2) * diag(sigmaDiag);
+    sigmaOurlierCurrent =  sigmaArray(indexSigma) * sigmaOutlier;
+    covOurlier = sigmaOurlierCurrent .^ 2;
     % Compute SNR:
-%     SNR(indexSigma) = 1 /(sum(sigmaDiag) * (sigmaScalar^2));
+    SNR(indexSigma) = 1 /(sum(sigmaDiag) * (sigmaArray(indexSigma)^2));
     
     % create temperal data objection (for parfor) 
     
@@ -67,7 +65,7 @@ for inexK = 1 : length(ks)
         
         %% Create observations
         observations = GenerateObservations(signal, numberOfObservations,...
-                            rho, sigmaMat, projection, pOutlier, currentSigmaOutlier);
+                            rho, sigma, projection, pOutlier, sigmaOurlierCurrent);
                         
         %% Compute Estimations
         [M1Est, M2Est] = ComputeEmpricalMoments(observations);
@@ -80,20 +78,21 @@ for inexK = 1 : length(ks)
         %% Define computation method to W
         momentFuction1by1 = @(theta, observations, sigma) ComputeMomentFucntion1By1(...
                   theta(1:L), theta((L+1) : end), observations, sigma,...
-                  projection, pOutlier, covOutlier);
+                  projection, pOutlier, covOurlier);
+        
         momentFuction1by1Direct = @(theta, observations, sigma) ComputeMomentFucntion1By1Direct(...
                   theta(1:L), theta((L+1) : end), observations, sigma,...
-                  projection, pOutlier, covOutlier);     
+                  projection, pOutlier, covOurlier);        
+      
         %% Compute W
         
         WLS = eye(length(empricalMoment), length(empricalMoment));
         WGMM = eye(length(empricalMoment), length(empricalMoment));
-        WGMM = ComputeW(currentGroundTruth , observations, sigmaMat, momentFuction1by1Direct);
-
+        WGMM = ComputeW(currentGroundTruth , observations, sigma, momentFuction1by1Direct);
         %% LS
         [estSignalLS, estRhoLS, infoLS, ~] = ComputeIterativeGMMviaMatlab(startingPoints,...
-                WLS, observations, empricalMoment, sigmaMat,...
-                momentFuction1by1, projection, pOutlier, covOutlier,...
+                WLS, observations, empricalMoment, sigma,...
+                momentFuction1by1, projection, pOutlier, covOurlier,...
                 maxNumOfIterations, 1, 1);
         
         %% Compute relative Errors - LS
@@ -103,10 +102,12 @@ for inexK = 1 : length(ks)
         cpuTimeLS = infoLS.CPUTime;
         tmprelativeErrorLS(iRep,:) =  [relativeErrorSignalLS,...
             relativeErrorRhoLS, numberOfIterLS, cpuTimeLS];
+         disp([num2str(iRep) ': end LS']);
+
         %% Opt GMM
         [estSignalGMM, estRhoGMM, infoGMM, ~] = ComputeIterativeGMMviaMatlab(...
-                startingPoints, WGMM, observations, empricalMoment, sigmaMat,...
-                momentFuction1by1, projection, pOutlier, covOutlier,...
+                startingPoints, WGMM, observations, empricalMoment, sigma,...
+                momentFuction1by1, projection, pOutlier, covOurlier,...
                 maxNumOfIterations, numberOfStepsGMM, 1);
         %% Compute relative Errors - GMM
         relativeErrorSignalGMM = RelativeErrorUpToShift(signal, estSignalGMM);
@@ -115,15 +116,16 @@ for inexK = 1 : length(ks)
         cpuTimeGMM = infoGMM.CPUTime;%singularValueDistanceToEye(WLS);
         tmprelativeErrorGMM(iRep,:) =  [relativeErrorSignalGMM,...
             relativeErrorRhoGMM, numberOfIterGMM, cpuTimeGMM];
-         
+        disp([num2str(iRep) ': end GMM']);
+
     end
 
-    relativeErrorLS(inexK,:,:) = tmprelativeErrorLS;
-    relativeErrorGMM(inexK,:,:) = tmprelativeErrorGMM;
+    relativeErrorLS(indexSigma,:,:) = tmprelativeErrorLS;
+    relativeErrorGMM(indexSigma,:,:) = tmprelativeErrorGMM;
     
     disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
     disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-    disp(['Yo man, im in index....' num2str(inexK) '  out of...' num2str(length(ks))]);
+    disp(['Yo man, im in index....' num2str(indexSigma) '  out of...' num2str(length(sigmaArray))]);
     disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
     disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
 end
@@ -138,23 +140,23 @@ if(toSave)
     save([savingPath,'data.mat']);
 end
 for ii = 1 : 4
-    meanrelativeErrorLS = zeros(length(ks),1);
-    meanrelativeErrorOpt = zeros(length(ks),1);
+    meanrelativeErrorLS = zeros(length(sigmaArray),1);
+    meanrelativeErrorOpt = zeros(length(sigmaArray),1);
 
     
-    stdrelativeErrorLS = zeros(length(ks),1);
-    stdrelativeErrorOpt = zeros(length(ks),1);
-    proportions = zeros(length(ks),numberRepeats);
+    stdrelativeErrorLS = zeros(length(sigmaArray),1);
+    stdrelativeErrorOpt = zeros(length(sigmaArray),1);
+    proportions = zeros(length(sigmaArray),numberRepeats);
     %% Compute mean & variance for each sigma
-    for indexK = 1 : length(ks)
-        meanrelativeErrorLS(indexK) = mean(squeeze(relativeErrorLS(indexK,:,ii)));
-        meanrelativeErrorOpt(indexK) = mean(squeeze(relativeErrorGMM(indexK,:,ii)));
+    for indexSigma = 1 : length(sigmaArray)
+        meanrelativeErrorLS(indexSigma) = mean(squeeze(relativeErrorLS(indexSigma,:,ii)));
+        meanrelativeErrorOpt(indexSigma) = mean(squeeze(relativeErrorGMM(indexSigma,:,ii)));
         
-        stdrelativeErrorLS(indexK) = std(squeeze(relativeErrorLS(indexK,:,ii)));
-        stdrelativeErrorOpt(indexK) = std(squeeze(relativeErrorGMM(indexK,:,ii)));
+        stdrelativeErrorLS(indexSigma) = std(squeeze(relativeErrorLS(indexSigma,:,ii)));
+        stdrelativeErrorOpt(indexSigma) = std(squeeze(relativeErrorGMM(indexSigma,:,ii)));
         % Ratio
-        proportions(indexK,:) = (squeeze(relativeErrorLS(indexK,:,ii))./...
-                                    squeeze(relativeErrorGMM(indexK,:,ii)));
+        proportions(indexSigma,:) = (squeeze(relativeErrorLS(indexSigma,:,ii))./...
+                                    squeeze(relativeErrorGMM(indexSigma,:,ii)));
     end
     
 
@@ -162,10 +164,10 @@ for ii = 1 : 4
     fig = figure();
     %% Mean
     subplot(2,1,1);
-    loglog(ks, meanrelativeErrorLS, 'r*-',...
-        ks, meanrelativeErrorOpt, 'b*-');
+    semilogx(SNR, meanrelativeErrorLS, 'r*-',...
+        SNR, meanrelativeErrorOpt, 'b*-');
 
-    xlabel('dim(observations)');
+    xlabel('SNR');
     legend('LS', 'GMM', 'Location','southwest');
     if (ii == 1)
          title(['Signal Mean - Relative Error']);
@@ -178,10 +180,10 @@ for ii = 1 : 4
     end
     %% Variance
     subplot(2,1,2);
-    loglog(ks, stdrelativeErrorLS, 'r*-', ...
-        ks, stdrelativeErrorOpt, 'b*-');
+    semilogx(SNR, stdrelativeErrorLS, 'r*-', ...
+        SNR, stdrelativeErrorOpt, 'b*-');
     
-    xlabel('dim(observations)');
+    xlabel('SNR');
     legend('LS', 'GMM', 'Location','southwest');
     if (ii == 1)
          title(['Signal std - Relative Error']);
@@ -215,10 +217,9 @@ for ii = 1 : 4
             saveas(fig,[savingPath, fileName, '.jpg']);
         end
     end
-    % box plot
+    
      fig = figure;
-   % [fig] = BoxPlotAsaf(fig, SNR(end:-1:1), proportions(end:-1:1,end:-1:1), 'b*-');
-    [fig] = BoxPlotAsaf(fig, ks, proportions, 'b*-');
+    [fig] = BoxPlotAsaf(fig, SNR, proportions, 'b*-');
     [indexMeanBigger1] = find(meanrelativeErrorOpt >= 1,1);
     hold on;
     plot(1: size(proportions,1), ones(size(proportions,1),1),'k--');
@@ -226,8 +227,8 @@ for ii = 1 : 4
     if ~isempty(indexMeanBigger1)
         plot((indexMeanBigger1) * ones(2,1), [max(proportions(:)); min(proportions(:))],'g');
     end
-    
-    xlabel('dim(observations)');
+    xlabel('\sigma');
+    xlabel('SNR');
     ylabel('Ratio');
     if (ii == 1)
         title('Ratio Signal Relative Error - LS / GMM');
@@ -253,4 +254,5 @@ for ii = 1 : 4
     end
 
 end
-MakeGraphPretty_Cryo;
+%%
+MakeGraphPretty_Homo;

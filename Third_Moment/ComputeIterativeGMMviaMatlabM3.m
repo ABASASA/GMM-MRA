@@ -25,11 +25,12 @@
 % estRho - estimated shift distibution (best score).
 % ASaf Abas 31.08.20
 
-function [estSignal, estRho, info, moreData] = ComputeIterativeGMMviaMatlab(startingPoints,...
+function [estSignal, estRho, info, moreData] = ComputeIterativeGMMviaMatlabM3(startingPoints,...
                 WFirst, observations, empricalMoment, sigma,...
                 momentFuction1by1, projection, pOutlier, CovOutlier,...
-                maxNumOfIterations, numberOfGMMIterations, FlagMeasreTime)
+                maxNumOfIterations, numberOfGMMIterations, FlagMeasreTime, sigmaScalar, indecesM3)
 %% init
+
 L = size(startingPoints, 1) ./ 2; % signals length
 numberofStartingPoints = size(startingPoints,2); % number of first guess
 
@@ -39,7 +40,6 @@ solutionsRho = zeros(L, numberofStartingPoints, numberOfGMMIterations);
 
 scores = zeros(numberofStartingPoints, numberOfGMMIterations); % cost function scores.
 Infos = cell(numberofStartingPoints, 1);
-flags = zeros(numberofStartingPoints, 1);
 %% Optimization
 %  run over all first guesses
 for iRep = 1 : numberofStartingPoints
@@ -51,9 +51,9 @@ for iRep = 1 : numberofStartingPoints
         CPUTime = 0;
     end
     %% First Step
-    [estSignal, estRho, currentInfo] = OptimizationIterationGMMinMRAviaMatlab(firstGuess,...
+    [estSignal, estRho, currentInfo] = OptimizationIterationGMMinMRAviaMatlabM3(firstGuess,...
             WFirst, empricalMoment, sigma, projection, pOutlier, CovOutlier,...
-                        maxNumOfIterations, FlagMeasreTime);
+                        maxNumOfIterations, FlagMeasreTime, sigmaScalar, indecesM3);
                     
     currentGuess = [estRho; estSignal];
     solutionsRho(:, iRep, 1) = estRho;
@@ -95,12 +95,11 @@ for iRep = 1 : numberofStartingPoints
     currentInfo.iterations = numberOfIterations;
     currentInfo.CPUTime = CPUTime;
     Infos{iRep} = currentInfo;
-    flags(iRep) = currentInfo.Flag;
+
 end
 %% Find Best Score
 [~,bestScoreIndex] = min(squeeze(scores(:,end)));
 info = Infos{bestScoreIndex};
-info.Flags = flags;
 %% Orginize output
 estRho = solutionsRho(:, bestScoreIndex, end);
 estSignal = solutionsSignal(:, bestScoreIndex, end);

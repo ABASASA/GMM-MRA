@@ -8,8 +8,8 @@ L = 15; %Signal length
 
 % Observations input
 numberOfObservations = 100000; % Number of observations
-sigmaArray = logspace(-2,1.2,15); % sigma values to check
-sigmaDiag = 1:L; % homogenous noise case
+sigmaArray = logspace(-2,1.2,10); % sigma values to check
+sigmaDiag = ones(L, 1); % homogenous noise case
 pOutlier = 0; % outliers precent
 sigmaOutlier = 10 * eye(L,L);
 
@@ -21,10 +21,10 @@ numberRepeats = 100; % This number represent how many signals & distributions (r
 
 % Optimization input
 maxNumOfIterations = inf; % number of iteration in each GMM optimization
-numberOfStepsGMM = 2; % number of steps in the GMM
+numberOfStepsGMM = 1; % number of steps in the GMM
 
 % Define saving fig paramter
-savingPath = 'Graphs/LS_With_2StepGMM-LinearDecayNoise/';
+savingPath = 'Graphs/LS_With_GMM-HomogNoise_diagonalW/';
 
 %% initialize data saveing objects
 % Save SNR values
@@ -79,12 +79,17 @@ for indexSigma = 1 : length(sigmaArray)
         momentFuction1by1 = @(theta, observations, sigma) ComputeMomentFucntion1By1(...
                   theta(1:L), theta((L+1) : end), observations, sigma,...
                   projection, pOutlier, covOurlier);
-
+        
+        momentFuction1by1Direct = @(theta, observations, sigma) ComputeMomentFucntion1By1Direct(...
+                  theta(1:L), theta((L+1) : end), observations, sigma,...
+                  projection, pOutlier, covOurlier);        
+      
         %% Compute W
         
         WLS = eye(length(empricalMoment), length(empricalMoment));
         WGMM = eye(length(empricalMoment), length(empricalMoment));
-        
+        WGMM = ComputeW(currentGroundTruth , observations, sigma, momentFuction1by1Direct);
+        WGMM = diag(diag(WGMM));
         %% LS
         [estSignalLS, estRhoLS, infoLS, ~] = ComputeIterativeGMMviaMatlab(startingPoints,...
                 WLS, observations, empricalMoment, sigma,...
@@ -250,5 +255,5 @@ for ii = 1 : 4
     end
 
 end
-
-MakeGraphPretty_LinearDecay;
+%%
+MakeGraphPretty_Homo;

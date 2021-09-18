@@ -8,7 +8,7 @@ L = 15; %Signal length
 
 % Observations input
 numberOfObservations = 100000; % Number of observations
-sigmaArray = logspace(-2,0.5,8);%logspace(-2,1.2,10); % sigma values to check
+sigmaArray = logspace(-1.8,0.5,8);%logspace(-2,1.2,10); % sigma values to check
 sigmaDiag = ones(L,1); % homogenous noise case
 pOutlier = 0.2; % outliers precent
 
@@ -23,7 +23,7 @@ maxNumOfIterations = inf; % number of iteration in each GMM optimization
 numberOfStepsGMM = 2; % number of steps in the GMM
 
 % Define saving fig paramter
-savingPath = 'Graphs/L1_GeoMid_WithWOptimization_vs_2-Step_L2_GMM_outliers_02/';
+savingPath = 'Graphs/L1_GeoMid_WithWOptimization_vs_2-Step_L2_GMM_outliers_02-countFlags/';
 
 %% initialize data saveing objects
 % Save SNR values
@@ -31,7 +31,7 @@ SNR = zeros(size(sigmaArray));
 
 relativeErrorLS = zeros(length(sigmaArray), numberRepeats, 4); % one row for signal and one for distibution.
 relativeErrorGMM = zeros(length(sigmaArray), numberRepeats, 4);
-
+flags = inf([length(sigmaArray),numberRepeats, numberOfStartingPoints, 2]);
 
 %% Run on every noise level
 for indexSigma = 1 : length(sigmaArray)
@@ -46,7 +46,9 @@ for indexSigma = 1 : length(sigmaArray)
     
     tmprelativeErrorLS = zeros(numberRepeats, 4);
     tmprelativeErrorGMM = zeros(numberRepeats, 4);
-    
+    tmpFlagsLS = inf([numberRepeats, numberOfStartingPoints]);
+    tmpFlagsGMM = inf([numberRepeats, numberOfStartingPoints]);
+
     %% repets GMM
     parfor iRep = 1 : numberRepeats
         
@@ -82,13 +84,16 @@ for indexSigma = 1 : length(sigmaArray)
         momentFuction1by1 = @(theta, observations, sigma) ComputeMomentFucntion1By1(...
                   theta(1:L), theta((L+1) : end), observations, sigma,...
                   projection, pOutlier, covOutliers);
-
+        momentFuction1by1Direct = @(theta, observations, sigma) ComputeMomentFucntion1By1Direct(...
+                  theta(1:L), theta((L+1) : end), observations, sigma,...
+                  projection, pOutlier, covOutliers);     
         %% Compute W
         
         WL1 = ones(length(empricalMomentMean),1);
         WL1 = WL1 ./ norm(WL1);
         WGMM = eye(length(empricalMomentMean), length(empricalMomentMean));
-        
+        WGMM = ComputeW(currentGroundTruth , observations, sigma, momentFuction1by1Direct);
+
         %% LS
         [estSignalLS, estRhoLS, infoLS, ~] = Iterative_GMM_L1_Optimization(startingPoints,...
                 WL1, empricalMomentGeoMedian, sigma, projection, pOutlier,...
@@ -108,7 +113,7 @@ for indexSigma = 1 : length(sigmaArray)
         [estSignalGMM, estRhoGMM, infoGMM, ~] = ComputeIterativeGMMviaMatlab(...
                 startingPoints, WGMM, observations, empricalMomentMean, sigma,...
                 momentFuction1by1, projection, pOutlier, covOutliers,...
-                maxNumOfIterations, numberOfStepsGMM, 1);
+                maxNumOfIterations, 1, 1);
         %% Compute relative Errors - GMM
         relativeErrorSignalGMM = RelativeErrorUpToShift(signal, estSignalGMM);
         relativeErrorRhoGMM = RelativeErrorUpToShift(rho, estRhoGMM);
@@ -117,8 +122,14 @@ for indexSigma = 1 : length(sigmaArray)
         tmprelativeErrorGMM(iRep,:) =  [relativeErrorSignalGMM,...
             relativeErrorRhoGMM, numberOfIterGMM, cpuTimeGMM];
         disp([num2str(iRep) ': end GMM']);
+        tmpFlagsLS(iRep,:)= infoLS.Flags ;
+        tmpFlagsGMM(iRep,:)= infoGMM.Flags ;
 
+       % tmpFlags( (iRep-1)* numberRepeats : iRep* numberRepeats, 1)= infoGMM.Flags;
+        %tmpFlags( (iRep-1)* numberRepeats : iRep* numberRepeats, 2)= infoGMM.Flags;
     end
+    flags(indexSigma,:,:,1)      = tmpFlagsLS;
+    flags(indexSigma,:,:,2)      = tmpFlagsGMM;
 
     relativeErrorLS(indexSigma,:,:) = tmprelativeErrorLS;
     relativeErrorGMM(indexSigma,:,:) = tmprelativeErrorGMM;

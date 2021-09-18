@@ -18,9 +18,9 @@
 % estSignal - estimated signal
 % estRho - estimated shift distibution
 % ASaf Abas 31.08.20
-function [estSignal, estRho, info] = OptimizationIterationGMMinMRAviaMatlab(startingPoint,...
+function [estSignal, estRho, info] = OptimizationIterationGMMinMRAviaMatlabM3(startingPoint,...
             W, empricalMoment, sigma, projection, pOutlier, CovOutlier,...
-            maxNumOfIterations, FlagMeasreTime)
+            maxNumOfIterations, FlagMeasreTime, sigmaScalar, indecesM3)
 
 if ~exist('maxNumOfIterations','var')
     maxNumOfIterations = 2000;
@@ -36,13 +36,12 @@ L = size(projection, 2);
 
 %% Enters the Cost & Grad's Functions
 momentsFunction = @(theta)...
-                         ComputeMomentFucntion(theta(1:L),...
+                         ComputeMoment3Fucntion(theta(1:L),...
                          theta((L+1) : end), sigma, empricalMoment,...
-                         projection, pOutlier, CovOutlier);                
+                         projection, pOutlier, CovOutlier, indecesM3, sigmaScalar);                
 
-jacobianFunctiton = @(theta)  ComputeJacobianMRA(theta(1:L),...
-                                            theta((L+1) : end), projection, pOutlier);
-
+jacobianFunctiton = @(theta)  ComputeJacobianM3MRA(theta(1:L), theta((L+1) : end),...
+                                projection, pOutlier, sigmaScalar);
 %% Constraints - without Limits on rho
 % distibutaion must be posative
 A = [-eye(L), zeros(L,L)]; 
@@ -72,17 +71,20 @@ optimizationFunction = @(x) GMMCostAndGradCompute(x, W, momentsFunction,...
 if FlagMeasreTime
     tic;
 end
-
+global con ind
+ind = 1;
+con = zeros(10000,1);
 % Optimization
-[solution, score, flag1, info] = fmincon(optimizationFunction,...
+[solution, score, ~, info] = fmincon(optimizationFunction,...
                 startingPoint, A, b, Aeq, beq, [], [], [], options);
-
+hold on;
+plot(1: (ind - 1) , con(1: (ind -  1)),'*--');
 if FlagMeasreTime
     CPUTime = toc; 
 end
 
 info.Score = score;
-info.Flag = flag1;
+
 if FlagMeasreTime
     info.CPUTime = CPUTime;
 else

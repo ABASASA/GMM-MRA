@@ -29,6 +29,7 @@ solutionsRho = zeros(L, numberofStartingPoints, numberOfGMMIterations);
 
 scores = zeros(numberofStartingPoints, numberOfGMMIterations); %obective values
 Infos = cell(numberofStartingPoints, 1);
+flags = zeros(numberofStartingPoints, 1);
 %% Going over all initial guesses
 for iRep = 1 : numberofStartingPoints
     
@@ -95,15 +96,15 @@ for iRep = 1 : numberofStartingPoints
         numberOfIterations = currentInfo.iterations + numberOfIterations;
         
         Wold = Wcurrent;
-
     end
     currentInfo.iterations = numberOfIterations;
     Infos{iRep} = currentInfo;
-
+    flags(iRep) = currentInfo.Flag;
 end
 %% Find Best Score
 [~,bestScoreIndex] = min(squeeze(scores(:,end)));
 info = Infos{bestScoreIndex};
+info.Flags = flags; 
 %% Orginize output
 estRho = solutionsRho(:, bestScoreIndex, end);
 estSignal = solutionsSignal(:, bestScoreIndex, end);

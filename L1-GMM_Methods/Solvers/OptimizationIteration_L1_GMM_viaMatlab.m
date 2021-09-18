@@ -72,7 +72,7 @@ if FlagMeasreTime
 end
 
 % Optimization
-[solution, score, ~, info] = fmincon(optimizationFunction,...
+[solution, score, flag1, info] = fmincon(optimizationFunction,...
                 startingPoint, A, b, Aeq, beq, [], [], [], options);
 
 if FlagMeasreTime
@@ -80,7 +80,7 @@ if FlagMeasreTime
 end
 
 info.Score = score;
-
+info.Flag = flag1;
 if FlagMeasreTime
     info.CPUTime = CPUTime;
 else

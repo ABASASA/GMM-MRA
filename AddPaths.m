@@ -10,3 +10,4 @@ addpath(genpath('MRA_Methods'));
 addpath(genpath('ThirdParty'));
 addpath(genpath('GenerateGraphs'));
 addpath(genpath('L1-GMM_Methods'));
+addpath(genpath('Third_Moment'));

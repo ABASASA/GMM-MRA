@@ -115,7 +115,7 @@ for indexSigma = 1 : length(sigmaArray)
       
         
         %% Geo distance compute
-
+%         WHetro = diag(diag(WStandart));
         geoStandatedTmp(iRep,:) = [ComputeGeodeticDistanceFromI_uptoscalar(WStandart), cond(WStandart)];
         geoHetroTmp(iRep,:) = [ComputeGeodeticDistanceFromI_uptoscalar(WHetro), cond(WHetro)];
 
@@ -142,6 +142,8 @@ end
 fig = figure;
 semilogx(SNR, mean(squeeze(geoStandated(:,:,1)),1), '*-', SNRHetro, mean(squeeze(geoHetro(:,:,1)),1), 's-');
 legend({'Homoscedastic', 'Heteroscedastic'}, 'Location', 'northwest')
+legend({'GMM', 'Only diagonal'}, 'Location', 'northwest')
+
 xlabel('SNR', 'fontsize', 12, 'fontweight','bold')
 ylabel('Mean Geo. Distance', 'fontsize', 12, 'fontweight','bold')
 xlim([0.01, 100])
